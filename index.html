@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tap to Trust — Rate by Voice</title>
+<style>
+  :root{--accent:#2563eb;--muted:#6b7280}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;margin:0;background:#f7fafc;color:#0f172a}
+  .container{max-width:980px;margin:28px auto;padding:20px;background:#fff;border-radius:10px;box-shadow:0 6px 18px rgba(15,23,42,0.08)}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+  h1{margin:0;font-size:20px}
+  .muted{color:var(--muted);font-size:13px}
+  nav button{margin-left:8px}
+  .row{display:flex;gap:18px}
+  .card{flex:1;padding:14px;border:1px solid #e6eef9;border-radius:8px;background:#fbfdff}
+  .shops-list{list-style:none;padding:0;margin:0}
+  .shops-list li{display:flex;align-items:center;justify-content:space-between;padding:10px;border-bottom:1px dashed #e6eef9}
+  .btn{background:var(--accent);color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
+  .btn.secondary{background:#e2e8f0;color:#0f172a}
+  form{display:grid;gap:8px}
+  input,select,textarea{padding:8px;border:1px solid #cbd5e1;border-radius:6px}
+  .stars{display:inline-flex;gap:6px}
+  .star{cursor:pointer;font-size:20px;padding:2px}
+  .recording{color:#dc2626;font-weight:600}
+  .rating-item{display:flex;gap:12px;align-items:center;padding:8px 0;border-top:1px solid #eef2ff}
+  audio{outline:none}
+  .small{font-size:13px;color:var(--muted)}
+  .center{display:flex;align-items:center;justify-content:center}
+  .danger{background:#ffefef;color:#b91c1c}
+  footer{margin-top:16px;text-align:center;font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+  <div class="container" id="app">
+    <header>
+      <div>
+        <h1>Tap to Trust</h1>
+        <div class="small muted">Rate purchases with a voice clip — super quick for customers, audio stored for shopkeepers</div>
+      </div>
+      <nav>
+        <span id="welcomeText" class="small muted"></span>
+        <button class="btn secondary" id="homeBtn">Home</button>
+        <button class="btn secondary" id="authBtn">Shopkeeper</button>
+        <button class="btn btn" id="logoutBtn" style="display:none">Logout</button>
+      </nav>
+    </header>
+
+    <!-- MAIN VIEWS -->
+    <div id="views">
+
+      <!-- HOME / Rate -->
+      <section id="homeView">
+        <div class="row">
+          <div class="card" style="flex:1.3">
+            <h3>Select your nearby shop</h3>
+            <p class="small muted">Choose the shop you bought from, tap a star rating, record a short voice message (e.g., \"Great service!\") and save.</p>
+            <ul id="shopsList" class="shops-list"></ul>
+
+            <div id="ratePanel" style="display:none;margin-top:12px">
+              <h4 id="rateShopName">Rate</h4>
+              <div>
+                <div class="stars" id="starPicker" aria-label="Rating">
+                  <span class="star" data-val="1">☆</span>
+                  <span class="star" data-val="2">☆</span>
+                  <span class="star" data-val="3">☆</span>
+                  <span class="star" data-val="4">☆</span>
+                  <span class="star" data-val="5">☆</span>
+                </div>
+                <div class="small muted">Selected: <span id="selectedRating">0</span>/5</div>
+              </div>
+
+              <div style="margin-top:10px">
+                <div id="recControls">
+                  <button class="btn" id="startRec">Start Recording</button>
+                  <button class="btn secondary" id="stopRec" style="display:none">Stop</button>
+                  <span id="recStatus" class="small muted"></span>
+                </div>
+                <div style="margin-top:8px">
+                  <textarea id="ratingNote" rows="2" placeholder="Optional short text note (e.g., 'polite staff')" style="width:100%"></textarea>
+                </div>
+                <div style="margin-top:10px">
+                  <button class="btn" id="saveRatingBtn" disabled>Save Rating</button>
+                  <button class="btn secondary" id="cancelRatingBtn">Cancel</button>
+                </div>
+                <div id="previewAudio" style="margin-top:8px"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Nearby Shops</h3>
+            <p class="small muted">If your shop isn't listed, shopkeepers can register using the Shopkeeper -> Register option.</p>
+            <div style="margin-top:12px">
+              <button class="btn" id="refreshShops">Refresh</button>
+              <button class="btn secondary" id="openRegister">Shopkeeper Register</button>
+            </div>
+            <hr style="margin:12px 0" />
+            <div id="noShops" class="small muted">No shops yet — shopkeepers can register.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- AUTH (login/register) -->
+      <section id="authView" style="display:none">
+        <div class="row">
+          <div class="card">
+            <h3>Shopkeeper Login</h3>
+            <form id="loginForm">
+              <input type="email" id="loginEmail" placeholder="Email" required />
+              <input type="password" id="loginPassword" placeholder="Password" required />
+              <div style="display:flex;gap:8px">
+                <button class="btn" type="submit">Login</button>
+                <button class="btn secondary" id="toRegister" type="button">Register</button>
+              </div>
+              <div id="loginMsg" class="small muted"></div>
+            </form>
+          </div>
+
+          <div class="card" id="registerCard">
+            <h3>Register Shop</h3>
+            <form id="registerForm">
+              <input type="text" id="shopName" placeholder="Shop name" required />
+              <input type="email" id="shopEmail" placeholder="Email" required />
+              <input type="password" id="shopPassword" placeholder="Password" required />
+              <input type="text" id="shopLocation" placeholder="Location / Address (optional)" />
+              <div style="display:flex;gap:8px">
+                <button class="btn" type="submit">Register</button>
+                <button class="btn secondary" id="cancelRegister" type="button">Cancel</button>
+              </div>
+              <div id="regMsg" class="small muted"></div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- DASHBOARD -->
+      <section id="dashboardView" style="display:none">
+        <div class="row">
+          <div class="card" style="flex:2">
+            <h3 id="dashTitle">Dashboard</h3>
+            <div class="small muted" id="dashInfo"></div>
+            <hr />
+            <div id="ratingsContainer">
+              <div class="small muted">No ratings yet</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Settings</h3>
+            <div class="small muted">
+              <strong>Shop name:</strong> <span id="dashShopName"></span><br/>
+              <strong>Email:</strong> <span id="dashShopEmail"></span>
+            </div>
+            <div style="margin-top:12px">
+              <button class="btn danger" id="deleteShopBtn">Delete Shop (all data)</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <footer>Made with ♡ — Tap to Trust demo (local-only). Always test microphone access in a secure browser.</footer>
+  </div>
+
+<script>
+/* ====== Simple Tap to Trust (single-file, localStorage demo) ======
+   Data model (localStorage key: 't2t_shops'):
+   shops = [
+     { id, name, email, password, location, ratings: [{id, when, rating, note, audioDataUrl}] }
+   ]
+   Session stored at 't2t_session' = { id, name, email }
+*/
+
+const LS_KEY = 't2t_shops';
+const SESSION_KEY = 't2t_session';
+
+let shops = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+let session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+let currentRateShop = null;
+let selectedRating = 0;
+let mediaRecorder = null;
+let recordedChunks = [];
+let currentAudioUrl = null;
+
+const el = id => document.getElementById(id);
+
+// UI elements
+const shopsList = el('shopsList');
+const noShops = el('noShops');
+const ratePanel = el('ratePanel');
+const rateShopName = el('rateShopName');
+const starPicker = el('starPicker');
+const selectedRatingEl = el('selectedRating');
+const startRecBtn = el('startRec');
+const stopRecBtn = el('stopRec');
+const recStatus = el('recStatus');
+const saveRatingBtn = el('saveRatingBtn');
+const previewAudio = el('previewAudio');
+const ratingNote = el('ratingNote');
+
+const homeView = el('homeView');
+const authView = el('authView');
+const dashboardView = el('dashboardView');
+const authBtn = el('authBtn');
+const homeBtn = el('homeBtn');
+const logoutBtn = el('logoutBtn');
+const welcomeText = el('welcomeText');
+const refreshShopsBtn = el('refreshShops');
+const openRegisterBtn = el('openRegister');
+
+function persist() {
+  localStorage.setItem(LS_KEY, JSON.stringify(shops));
+}
+
+function showView(v) {
+  homeView.style.display = v === 'home' ? '' : 'none';
+  authView.style.display = v === 'auth' ? '' : 'none';
+  dashboardView.style.display = v === 'dash' ? '' : 'none';
+}
+
+function renderHeader() {
+  if (session) {
+    welcomeText.textContent = 'Signed in: ' + session.name;
+    logoutBtn.style.display = '';
+    authBtn.style.display = 'none';
+  } else {
+    welcomeText.textContent = '';
+    logoutBtn.style.display = 'none';
+    authBtn.style.display = '';
+  }
+}
+
+function renderShops() {
+  shopsList.innerHTML = '';
+  if (!shops.length) {
+    noShops.style.display = '';
+    return;
+  }
+  noShops.style.display = 'none';
+  shops.forEach(s => {
+    const li = document.createElement('li');
+    li.innerHTML = `<div>
+                      <strong>${escapeHtml(s.name)}</strong><div class="small muted">${escapeHtml(s.location || '')}</div>
+                    </div>
+                    <div style="display:flex;gap:8px">
+                      <button class="btn secondary" data-id="${s.id}" onclick="openRate('${s.id}')">Rate</button>
+                      <button class="btn" data-id="${s.id}" onclick="openShopDashboard('${s.id}')">View</button>
+                    </div>`;
+    shopsList.appendChild(li);
+  });
+}
+
+function escapeHtml(text){ return (text||'').toString().replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ----- Rating flow ----- */
+window.openRate = function(shopId) {
+  const shop = shops.find(x => x.id === shopId);
+  if (!shop) return alert('Shop not found');
+  currentRateShop = shop;
+  rateShopName.textContent = 'Rating for: ' + shop.name;
+  selectedRating = 0; selectedRatingEl.textContent = '0';
+  previewAudio.innerHTML = '';
+  ratingNote.value = '';
+  document.querySelectorAll('.star').forEach(s => s.textContent = '☆');
+  ratePanel.style.display = '';
+  saveRatingBtn.disabled = true;
+  // scroll into view
+  ratePanel.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+/* star selection */
+starPicker.addEventListener('click', e => {
+  if (!e.target.classList.contains('star')) return;
+  selectedRating = Number(e.target.dataset.val);
+  selectedRatingEl.textContent = selectedRating;
+  document.querySelectorAll('.star').forEach(s => {
+    s.textContent = Number(s.dataset.val) <= selectedRating ? '★' : '☆';
+  });
+  checkCanSave();
+});
+
+/* Recording logic */
+startRecBtn.addEventListener('click', async () => {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return alert('Your browser does not support audio recording.');
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => {
+      if (e.data.size > 0) recordedChunks.push(e.data);
+    };
+    mediaRecorder.onstop = async () => {
+      const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+      currentAudioUrl = await blobToDataURL(blob); // base64 data URL
+      previewAudio.innerHTML = `<div class="small muted">Preview:</div>
+        <audio controls src="${currentAudioUrl}"></audio>
+        <div class="small muted">You can re-record if you want.</div>`;
+      stopRecBtn.style.display = 'none';
+      startRecBtn.style.display = '';
+      recStatus.textContent = '';
+      checkCanSave();
+      // stop tracks
+      stream.getTracks().forEach(t=>t.stop());
+    };
+    mediaRecorder.start();
+    startRecBtn.style.display = 'none';
+    stopRecBtn.style.display = '';
+    recStatus.textContent = ' recording... ';
+  } catch (err) {
+    alert('Microphone access denied or error: ' + err.message);
+  }
+});
+
+stopRecBtn.addEventListener('click', () => {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+});
+
+function blobToDataURL(blob){
+  return new Promise(resolve => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.readAsDataURL(blob);
+  });
+}
+
+function checkCanSave(){
+  saveRatingBtn.disabled = !(currentRateShop && selectedRating > 0 && currentAudioUrl);
+}
+
+el('cancelRatingBtn').addEventListener('click', () => {
+  currentRateShop = null;
+  ratePanel.style.display = 'none';
+});
+
+saveRatingBtn.addEventListener('click', () => {
+  if (!currentRateShop) return;
+  const shopIndex = shops.findIndex(s=>s.id===currentRateShop.id);
+  if (shopIndex<0) return alert('Shop not found');
+  const ratingObj = {
+    id: 'r_' + Date.now(),
+    when: new Date().toISOString(),
+    rating: selectedRating,
+    note: ratingNote.value || '',
+    audioDataUrl: currentAudioUrl
+  };
+  shops[shopIndex].ratings = shops[shopIndex].ratings || [];
+  shops[shopIndex].ratings.push(ratingObj);
+  persist();
+  alert('Thank you — your voice rating was saved!');
+  currentRateShop = null;
+  ratePanel.style.display = 'none';
+  renderShops();
+});
+
+/* ----- Auth: register/login ----- */
+el('registerForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const name = el('shopName').value.trim();
+  const email = el('shopEmail').value.trim();
+  const password = el('shopPassword').value;
+  const location = el('shopLocation').value.trim();
+  // simple duplicate email check
+  if (shops.some(s => s.email.toLowerCase() === email.toLowerCase())) {
+    el('regMsg').textContent = 'Email already registered. Please login.';
+    return;
+  }
+  const id = 'shop_' + Date.now();
+  const shop = { id, name, email, password, location, ratings: [] };
+  shops.push(shop);
+  persist();
+  // auto-login
+  session = { id: shop.id, name: shop.name, email: shop.email };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  el('regMsg').textContent = 'Registered and logged in.';
+  el('shopName').value = el('shopEmail').value = el('shopPassword').value = el('shopLocation').value = '';
+  renderHeader();
+  openDashboard();
+});
+
+el('loginForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const email = el('loginEmail').value.trim();
+  const password = el('loginPassword').value;
+  const found = shops.find(s=>s.email.toLowerCase()===email.toLowerCase() && s.password===password);
+  if (!found) {
+    el('loginMsg').textContent = 'Login failed. Check email/password.';
+    return;
+  }
+  session = { id: found.id, name: found.name, email: found.email };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  el('loginMsg').textContent = 'Logged in.';
+  el('loginEmail').value = el('loginPassword').value = '';
+  renderHeader();
+  openDashboard();
+});
+
+/* ----- Dashboard ----- */
+function openDashboard(){
+  if (!session) { alert('Please login as a shopkeeper'); showView('auth'); return; }
+  showView('dash');
+  el('dashTitle').textContent = 'Dashboard — ' + session.name;
+  el('dashShopName').textContent = session.name;
+  el('dashShopEmail').textContent = session.email;
+  renderRatingsForSession();
+}
+
+window.openShopDashboard = function(shopId){
+  // If logged-in shop matches, open dashboard. Otherwise open public view (read-only)
+  const shop = shops.find(s=>s.id===shopId);
+  if (!shop) return alert('Shop not found');
+  if (session && session.id === shop.id) {
+    openDashboard();
+  } else {
+    // show a modal-like simple page: rating list
+    showView('dash');
+    el('dashTitle').textContent = 'Ratings for ' + shop.name;
+    el('dashShopName').textContent = shop.name;
+    el('dashShopEmail').textContent = shop.email;
+    // show read-only ratings
+    renderRatings(shop);
+    // hide delete button
+    el('deleteShopBtn').style.display = 'none';
+  }
+};
+
+function renderRatingsForSession(){
+  const shop = shops.find(s=>s.id===session.id);
+  if (!shop) {
+    el('ratingsContainer').innerHTML = '<div class="small muted">No shop found.</div>';
+    return;
+  }
+  el('deleteShopBtn').style.display = '';
+  renderRatings(shop);
+}
+
+function renderRatings(shop){
+  const container = el('ratingsContainer');
+  container.innerHTML = '';
+  if (!shop.ratings || !shop.ratings.length) {
+    container.innerHTML = '<div class="small muted">No ratings yet</div>';
+    return;
+  }
+  // newest first
+  const list = shop.ratings.slice().reverse();
+  list.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'rating-item';
+    div.innerHTML = `<div style="flex:1">
+       <div><strong>${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</strong> <span class="small muted">on ${new Date(r.when).toLocaleString()}</span></div>
+       <div class="small muted">${escapeHtml(r.note)}</div>
+       </div>
+       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+         <audio controls src="${r.audioDataUrl}"></audio>
+         ${session && session.id === shop.id ? `<button class="btn secondary" data-rid="${r.id}">Delete</button>` : ''}
+       </div>`;
+    container.appendChild(div);
+    if (session && session.id === shop.id) {
+      const delBtn = div.querySelector('button[data-rid]');
+      delBtn.addEventListener('click', () => {
+        if (!confirm('Delete this rating?')) return;
+        const idx = shops.findIndex(s => s.id === shop.id);
+        shops[idx].ratings = shops[idx].ratings.filter(rr => rr.id !== r.id);
+        persist();
+        renderRatingsForSession();
+      });
+    }
+  });
+}
+
+/* delete shop */
+el('deleteShopBtn').addEventListener('click', () => {
+  if (!confirm('Delete this shop and ALL its ratings? This cannot be undone.')) return;
+  shops = shops.filter(s => s.id !== session.id);
+  persist();
+  localStorage.removeItem(SESSION_KEY);
+  session = null;
+  renderHeader();
+  showView('home');
+  renderShops();
+});
+
+/* UI events */
+authBtn.addEventListener('click', ()=>showView('auth'));
+homeBtn.addEventListener('click', ()=>showView('home'));
+logoutBtn.addEventListener('click', ()=>{
+  session = null;
+  localStorage.removeItem(SESSION_KEY);
+  renderHeader();
+  showView('home');
+});
+
+refreshShopsBtn.addEventListener('click', ()=>renderShops());
+openRegisterBtn.addEventListener('click', ()=>showView('auth'));
+el('toRegister').addEventListener('click', ()=>{ /* scroll to register card */ document.getElementById('shopName').focus(); });
+el('cancelRegister').addEventListener('click', ()=>showView('home'));
+
+/* open register shortcut */
+el('openRegister').addEventListener('click', ()=>showView('auth'));
+
+/* initial render */
+function init(){
+  renderHeader();
+  renderShops();
+  showView('home');
+  // if session exists, update header
+  if (session) {
+    // If user navigates and clicks Dashboard
+    // show logged-in dashboard controls
+  }
+}
+init();
+
+/* tiny helper so buttons created inline can call openRate/openShopDashboard from markup */
+window.openRate = window.openRate;
+window.openShopDashboard = window.openShopDashboard;
+
+/* Expose a little guidance in console */
+console.log('Tap to Trust loaded. Save this file as tap_to_trust.html and open in a modern browser.');
+
+/* Accessibility + small checks: ensure saving button state updates when audio changes */
+new MutationObserver(checkCanSave).observe(previewAudio, {childList:true, subtree:true});
+</script>
+</body>
+</html>
